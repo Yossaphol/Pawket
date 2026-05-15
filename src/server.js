@@ -5,6 +5,15 @@ const line = require("@line/bot-sdk");
 
 const app = express();
 
+const requiredEnv = ["LINE_CHANNEL_SECRET", "LINE_CHANNEL_ACCESS_TOKEN"];
+
+for (const key of requiredEnv) {
+  if (!process.env[key]) {
+    console.error(`Missing environment variable: ${key}`);
+    process.exit(1);
+  }
+}
+
 const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET,
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
@@ -24,7 +33,7 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
 
     res.status(200).end();
   } catch (error) {
-    console.error(error);
+    console.error("Webhook error:", error);
     res.status(500).end();
   }
 });

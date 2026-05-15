@@ -62,8 +62,8 @@ async function handleEvent(event) {
     userText === "สรุปวันนี่" ||
     lowerText === "today"
   ) {
-    const summaryText = await getDailySummary(user.id);
-    return replyText(event.replyToken, summaryText);
+    const flex = await getDailySummaryFlex(user.id);
+    return replyFlex(event.replyToken, "สรุปวันนี้", flex);
   }
 
   if (
@@ -71,8 +71,8 @@ async function handleEvent(event) {
     userText === "สรุปเดือน" ||
     lowerText === "month"
   ) {
-    const summaryText = await getMonthlySummary(user.id);
-    return replyText(event.replyToken, summaryText);
+    const flex = await getMonthlySummaryFlex(user.id);
+    return replyFlex(event.replyToken, "สรุปเดือนนี้", flex);
   }
 
   if (
@@ -133,8 +133,8 @@ async function handleEvent(event) {
     userText === "ใช้ได้วันนี้" ||
     lowerText === "daily budget"
   ) {
-    const dailyBudgetText = await getDailyBudget(user.id);
-    return replyText(event.replyToken, dailyBudgetText);
+    const flex = await getDailyBudgetFlex(user.id);
+    return replyFlex(event.replyToken, "งบวันนี้", flex);
   }
 
   const categoryBudget = parseCategoryBudgetCommand(userText);
@@ -178,8 +178,8 @@ async function handleEvent(event) {
     userText === "ดูเป้าหมาย" ||
     lowerText === "goals"
   ) {
-    const goalsText = await getGoals(user.id);
-    return replyText(event.replyToken, goalsText);
+    const flex = await getGoalsFlex(user.id);
+    return replyFlex(event.replyToken, "เป้าหมาย", flex);
   }
 
   const transaction = await parseTransaction(user.id, userText);
@@ -236,6 +236,120 @@ function replyText(replyToken, text) {
       },
     ],
   });
+}
+
+function replyFlex(replyToken, altText, contents) {
+  return client.replyMessage({
+    replyToken,
+    messages: [
+      {
+        type: "flex",
+        altText,
+        contents,
+      },
+    ],
+  });
+}
+
+function createStatRow(label, value) {
+  return {
+    type: "box",
+    layout: "horizontal",
+    margin: "md",
+    contents: [
+      {
+        type: "text",
+        text: label,
+        size: "sm",
+        color: "#666666",
+        flex: 2,
+      },
+      {
+        type: "text",
+        text: String(value),
+        size: "sm",
+        color: "#111111",
+        align: "end",
+        flex: 3,
+        weight: "bold",
+        wrap: true,
+      },
+    ],
+  };
+}
+
+function createDivider() {
+  return {
+    type: "separator",
+    margin: "lg",
+  };
+}
+
+function createPrimaryButton(label, text) {
+  return {
+    type: "button",
+    style: "primary",
+    height: "sm",
+    action: {
+      type: "message",
+      label,
+      text,
+    },
+  };
+}
+
+function createSecondaryButton(label, text) {
+  return {
+    type: "button",
+    style: "secondary",
+    height: "sm",
+    action: {
+      type: "message",
+      label,
+      text,
+    },
+  };
+}
+
+function createEmptyFlex(title, message, buttonLabel, buttonText) {
+  const footerContents = [];
+
+  if (buttonLabel && buttonText) {
+    footerContents.push(createPrimaryButton(buttonLabel, buttonText));
+  }
+
+  return {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: title,
+          weight: "bold",
+          size: "xl",
+        },
+        {
+          type: "text",
+          text: message,
+          margin: "md",
+          size: "sm",
+          color: "#666666",
+          wrap: true,
+        },
+      ],
+    },
+    footer:
+      footerContents.length > 0
+        ? {
+            type: "box",
+            layout: "vertical",
+            spacing: "sm",
+            contents: footerContents,
+          }
+        : undefined,
+  };
 }
 
 async function parseTransaction(userId, text) {
@@ -820,6 +934,86 @@ async function getDailySummary(userId) {
   );
 }
 
+async function getDailySummaryFlex(userId) {
+  const today = getTodayBangkokDate();
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("transaction_date", today);
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    return createEmptyFlex(
+      "สรุปวันนี้ 📊",
+      "วันนี้ยังไม่มีรายการบันทึกครับ",
+      "+ เพิ่มรายการ",
+      "กินข้าว 80"
+    );
+  }
+
+  const summary = calculateSummary(data);
+
+  return {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: "สรุปวันนี้ 📊",
+          weight: "bold",
+          size: "xl",
+        },
+        {
+          type: "text",
+          text: today,
+          size: "xs",
+          color: "#888888",
+          margin: "sm",
+        },
+        createDivider(),
+        createStatRow("รายรับ", `${formatMoney(summary.totalIncome)} บาท`),
+        createStatRow("รายจ่าย", `${formatMoney(summary.totalExpense)} บาท`),
+        createStatRow(
+          "คงเหลือสุทธิ",
+          `${formatMoney(summary.totalIncome - summary.totalExpense)} บาท`
+        ),
+        createDivider(),
+        {
+          type: "text",
+          text: "รายจ่ายแยกตามหมวด",
+          margin: "lg",
+          size: "sm",
+          weight: "bold",
+        },
+        {
+          type: "text",
+          text: summary.categoryText.replace(/^- /gm, "• "),
+          wrap: true,
+          margin: "sm",
+          size: "sm",
+          color: "#555555",
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        createPrimaryButton("ดูเดือนนี้", "สรุปเดือนนี้"),
+        createSecondaryButton("รายการล่าสุด", "ล่าสุด"),
+      ],
+    },
+  };
+}
+
 async function getMonthlySummary(userId) {
   const today = getTodayBangkokDate();
   const [year, month, day] = today.split("-");
@@ -858,6 +1052,118 @@ async function getMonthlySummary(userId) {
     `รายจ่ายแยกตามหมวด:\n${summary.categoryText}` +
     (categoryBudgetWarnings ? `\n\nงบหมวด:\n${categoryBudgetWarnings}` : "")
   );
+}
+
+async function getMonthlySummaryFlex(userId) {
+  const today = getTodayBangkokDate();
+  const [year, month, day] = today.split("-");
+
+  const startDate = `${year}-${month}-01`;
+  const endDate = today;
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("transaction_date", startDate)
+    .lte("transaction_date", endDate);
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    return createEmptyFlex(
+      "สรุปเดือนนี้ 📆",
+      "เดือนนี้ยังไม่มีรายการบันทึกครับ",
+      "+ เพิ่มรายการ",
+      "กินข้าว 80"
+    );
+  }
+
+  const summary = calculateSummary(data);
+  const daysPassed = Number(day);
+  const dailyAverage = summary.totalExpense / daysPassed;
+  const categoryBudgetWarnings = await getCategoryBudgetWarnings(userId, data);
+
+  const contents = [
+    {
+      type: "text",
+      text: "สรุปเดือนนี้ 📆",
+      weight: "bold",
+      size: "xl",
+    },
+    {
+      type: "text",
+      text: `${startDate} ถึง ${endDate}`,
+      size: "xs",
+      color: "#888888",
+      margin: "sm",
+    },
+    createDivider(),
+    createStatRow("จำนวนรายการ", `${data.length} รายการ`),
+    createStatRow("รายรับรวม", `${formatMoney(summary.totalIncome)} บาท`),
+    createStatRow("รายจ่ายรวม", `${formatMoney(summary.totalExpense)} บาท`),
+    createStatRow(
+      "คงเหลือสุทธิ",
+      `${formatMoney(summary.totalIncome - summary.totalExpense)} บาท`
+    ),
+    createStatRow("เฉลี่ยใช้วันละ", `${formatMoney(dailyAverage)} บาท`),
+    createStatRow("หมวดสูงสุด", summary.topCategoryText),
+    createDivider(),
+    {
+      type: "text",
+      text: "รายจ่ายแยกตามหมวด",
+      margin: "lg",
+      size: "sm",
+      weight: "bold",
+    },
+    {
+      type: "text",
+      text: summary.categoryText.replace(/^- /gm, "• "),
+      wrap: true,
+      margin: "sm",
+      size: "sm",
+      color: "#555555",
+    },
+  ];
+
+  if (categoryBudgetWarnings) {
+    contents.push(createDivider());
+    contents.push({
+      type: "text",
+      text: "สถานะงบหมวด",
+      margin: "lg",
+      size: "sm",
+      weight: "bold",
+    });
+    contents.push({
+      type: "text",
+      text: categoryBudgetWarnings.replace(/^- /gm, "• "),
+      wrap: true,
+      margin: "sm",
+      size: "sm",
+      color: "#555555",
+    });
+  }
+
+  return {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents,
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        createPrimaryButton("ดูงบวันนี้", "งบวันนี้"),
+        createSecondaryButton("สรุปวันนี้", "สรุปวันนี้"),
+      ],
+    },
+  };
 }
 
 function calculateSummary(transactions) {
@@ -992,6 +1298,108 @@ async function getDailyBudget(userId) {
     `เหลือทั้งเดือน: ${formatMoney(remainingBudget)} บาท\n` +
     `เหลืออีก: ${remainingDays} วัน`
   );
+}
+
+async function getDailyBudgetFlex(userId) {
+  const today = getTodayBangkokDate();
+  const [yearText, monthText, dayText] = today.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  const { data: budget, error: budgetError } = await supabase
+    .from("monthly_budgets")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("year", year)
+    .eq("month", month)
+    .maybeSingle();
+
+  if (budgetError) {
+    throw budgetError;
+  }
+
+  if (!budget) {
+    return createEmptyFlex(
+      "งบวันนี้ 💰",
+      "ยังไม่ได้ตั้งงบเดือนนี้ครับ",
+      "ตั้งงบ 12,000",
+      "ตั้งงบเดือนนี้ 12000"
+    );
+  }
+
+  const startDate = `${yearText}-${monthText}-01`;
+
+  const { data: transactions, error: transactionError } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("type", "expense")
+    .gte("transaction_date", startDate)
+    .lte("transaction_date", today);
+
+  if (transactionError) {
+    throw transactionError;
+  }
+
+  const spent = (transactions || []).reduce(
+    (sum, item) => sum + Number(item.amount),
+    0
+  );
+
+  const totalBudget = Number(budget.total_budget);
+  const remainingBudget = totalBudget - spent;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const remainingDays = Math.max(daysInMonth - day + 1, 1);
+  const dailyBudget = Math.max(remainingBudget / remainingDays, 0);
+  const usedPercent = totalBudget > 0 ? (spent / totalBudget) * 100 : 0;
+
+  return {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: "งบวันนี้ 💰",
+          weight: "bold",
+          size: "xl",
+        },
+        {
+          type: "text",
+          text: `${formatMoney(dailyBudget)} บาท`,
+          weight: "bold",
+          size: "xxl",
+          margin: "lg",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: "ใช้ได้ประมาณวันนี้",
+          size: "sm",
+          color: "#888888",
+        },
+        createDivider(),
+        createStatRow("งบเดือนนี้", `${formatMoney(totalBudget)} บาท`),
+        createStatRow(
+          "ใช้ไปแล้ว",
+          `${formatMoney(spent)} บาท (${usedPercent.toFixed(1)}%)`
+        ),
+        createStatRow("เหลือทั้งเดือน", `${formatMoney(remainingBudget)} บาท`),
+        createStatRow("เหลืออีก", `${remainingDays} วัน`),
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        createPrimaryButton("สรุปเดือนนี้", "สรุปเดือนนี้"),
+        createSecondaryButton("ตั้งงบใหม่", "ตั้งงบเดือนนี้ 12000"),
+      ],
+    },
+  };
 }
 
 async function setCategoryBudget(userId, categoryBudget) {
@@ -1312,6 +1720,94 @@ async function getGoals(userId) {
     .join("\n\n");
 
   return `เป้าหมายของคุณ 🎯\n\n${goalsText}`;
+}
+
+async function getGoalsFlex(userId) {
+  const { data, error } = await supabase
+    .from("goals")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    return createEmptyFlex(
+      "เป้าหมาย 🎯",
+      "ยังไม่มีเป้าหมายครับ",
+      "ตั้งเป้า iPhone",
+      "ตั้งเป้า iPhone 45000"
+    );
+  }
+
+  const goalRows = data.slice(0, 5).map((goal) => {
+    const current = Number(goal.current_amount);
+    const target = Number(goal.target_amount);
+    const percent = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+    const remaining = Math.max(target - current, 0);
+
+    return {
+      type: "box",
+      layout: "vertical",
+      margin: "lg",
+      contents: [
+        {
+          type: "text",
+          text: goal.name,
+          weight: "bold",
+          size: "sm",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: `${formatMoney(current)} / ${formatMoney(target)} บาท (${percent.toFixed(
+            1
+          )}%)`,
+          size: "xs",
+          color: "#666666",
+          margin: "xs",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: `เหลืออีก ${formatMoney(remaining)} บาท`,
+          size: "xs",
+          color: "#888888",
+          margin: "xs",
+          wrap: true,
+        },
+      ],
+    };
+  });
+
+  return {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: "เป้าหมายของคุณ 🎯",
+          weight: "bold",
+          size: "xl",
+        },
+        ...goalRows,
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [
+        createPrimaryButton("เพิ่มเงินออม", "ออม iPhone 1000"),
+        createSecondaryButton("ตั้งเป้าใหม่", "ตั้งเป้า iPhone 45000"),
+      ],
+    },
+  };
 }
 
 async function getWalletsText(userId) {

@@ -14,29 +14,32 @@ for (const key of requiredEnv) {
   }
 }
 
-const config = {
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
+const client = line.LineBotClient.fromChannelAccessToken({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-};
-
-const client = new line.Client(config);
+});
 
 app.get("/", (req, res) => {
   res.send("LINE Finance Bot is running");
 });
 
-app.post("/webhook", line.middleware(config), async (req, res) => {
-  try {
-    const events = req.body.events || [];
+app.post(
+  "/webhook",
+  line.middleware({
+    channelSecret: process.env.LINE_CHANNEL_SECRET,
+  }),
+  async (req, res) => {
+    try {
+      const events = req.body.events || [];
 
-    await Promise.all(events.map(handleEvent));
+      await Promise.all(events.map(handleEvent));
 
-    res.status(200).end();
-  } catch (error) {
-    console.error("Webhook error:", error);
-    res.status(500).end();
+      res.status(200).end();
+    } catch (error) {
+      console.error("Webhook error:", error);
+      res.status(500).end();
+    }
   }
-});
+);
 
 async function handleEvent(event) {
   if (event.type !== "message") return;
@@ -44,9 +47,14 @@ async function handleEvent(event) {
 
   const userText = event.message.text;
 
-  return client.replyMessage(event.replyToken, {
-    type: "text",
-    text: `รับข้อความแล้ว: ${userText}`,
+  return client.replyMessage({
+    replyToken: event.replyToken,
+    messages: [
+      {
+        type: "text",
+        text: `รับข้อความแล้ว: ${userText}`,
+      },
+    ],
   });
 }
 

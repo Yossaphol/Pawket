@@ -46,16 +46,71 @@ async function handleEvent(event) {
   if (event.message.type !== "text") return;
 
   const userText = event.message.text;
+  const transaction = parseTransaction(userText);
+
+  if (!transaction) {
+    return client.replyMessage({
+      replyToken: event.replyToken,
+      messages: [
+        {
+          type: "text",
+          text: "ลองพิมพ์แบบนี้ได้เลย: กินข้าว 80 หรือ เงินเดือน 18000",
+        },
+      ],
+    });
+  }
 
   return client.replyMessage({
     replyToken: event.replyToken,
     messages: [
       {
         type: "text",
-        text: `รับข้อความแล้ว: ${userText}`,
+        text:
+          `บันทึกแล้ว ✅\n\n` +
+          `ประเภท: ${transaction.type}\n` +
+          `หมวด: ${transaction.category}\n` +
+          `จำนวน: ${transaction.amount} บาท`,
       },
     ],
   });
+}
+
+function parseTransaction(text) {
+  const amountMatch = text.match(/\d+(\.\d+)?/);
+
+  if (!amountMatch) {
+    return null;
+  }
+
+  const amount = Number(amountMatch[0]);
+  const lowerText = text.toLowerCase();
+
+  const incomeKeywords = ["เงินเดือน", "ได้เงิน", "รายได้", "โบนัส", "ฟรีแลนซ์"];
+  const foodKeywords = ["กิน", "ข้าว", "กาแฟ", "ชา", "อาหาร", "ขนม"];
+  const transportKeywords = ["น้ำมัน", "รถ", "แท็กซี่", "bts", "mrt", "grab"];
+  const shoppingKeywords = ["ซื้อ", "shopee", "lazada", "เสื้อ", "ของ"];
+
+  let type = "expense";
+  let category = "other";
+
+  if (incomeKeywords.some((word) => lowerText.includes(word))) {
+    type = "income";
+    category = "income";
+  } else if (foodKeywords.some((word) => lowerText.includes(word))) {
+    category = "food";
+  } else if (transportKeywords.some((word) => lowerText.includes(word))) {
+    category = "transport";
+  } else if (shoppingKeywords.some((word) => lowerText.includes(word))) {
+    category = "shopping";
+  }
+
+  return {
+    type,
+    amount,
+    category,
+    note: text.replace(amountMatch[0], "").trim(),
+    rawText: text,
+  };
 }
 
 const port = process.env.PORT || 3000;

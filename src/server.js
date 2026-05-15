@@ -54,6 +54,16 @@ async function handleEvent(event) {
   const userText = event.message.text.trim();
   const lowerText = userText.toLowerCase();
 
+  if (
+    userText === "ช่วยเหลือ" ||
+    userText === "คำสั่ง" ||
+    userText === "เมนู" ||
+    lowerText === "help" ||
+    lowerText === "menu"
+  ) {
+    return replyFlex(event.replyToken, "ช่วยเหลือ", getHelpFlex());
+  }
+
   const user = await getOrCreateUser(event.source.userId);
   await ensureDefaultWallets(user.id);
 
@@ -85,12 +95,52 @@ async function handleEvent(event) {
     return replyText(event.replyToken, latestText);
   }
 
-  if (
-    userText === "ลบล่าสุด" ||
-    userText === "ลบรายการล่าสุด" ||
-    lowerText === "delete latest"
+    if (
+        userText === "ลบล่าสุด" ||
+        lowerText === "delete latest"
+    ) {
+        const deletedText = await deleteLatestTransaction(user.id);
+        return replyText(event.replyToken, deletedText);
+    }
+
+    if (
+    userText === "ลบข้อมูลวันนี้" ||
+    userText === "ลบวันนี้" ||
+    userText === "ล้างวันนี้" ||
+    lowerText === "clear today"
   ) {
-    const deletedText = await deleteLatestTransaction(user.id);
+    const deletedText = await deleteTransactionsByScope(user.id, "today");
+    return replyText(event.replyToken, deletedText);
+  }
+
+  if (
+    userText === "ลบข้อมูลเดือนนี้" ||
+    userText === "ลบเดือนนี้" ||
+    userText === "ล้างเดือนนี้" ||
+    lowerText === "clear month"
+  ) {
+    const deletedText = await deleteTransactionsByScope(user.id, "month");
+    return replyText(event.replyToken, deletedText);
+  }
+
+  if (
+    userText === "ลบข้อมูลทั้งหมด" ||
+    userText === "ล้างข้อมูลทั้งหมด" ||
+    lowerText === "clear all"
+  ) {
+    return replyText(
+      event.replyToken,
+      "⚠️ คำสั่งนี้จะลบ transaction ทั้งหมดของคุณ\n\n" +
+        "ถ้าต้องการลบจริง ให้พิมพ์:\n" +
+        "ยืนยันลบข้อมูลทั้งหมด"
+    );
+  }
+
+  if (
+    userText === "ยืนยันลบข้อมูลทั้งหมด" ||
+    lowerText === "confirm clear all"
+  ) {
+    const deletedText = await deleteTransactionsByScope(user.id, "all");
     return replyText(event.replyToken, deletedText);
   }
 
@@ -349,6 +399,286 @@ function createEmptyFlex(title, message, buttonLabel, buttonText) {
             contents: footerContents,
           }
         : undefined,
+  };
+}
+
+function createCommandHelpRow(command, description, example) {
+  const contents = [
+    {
+      type: "text",
+      text: command,
+      size: "sm",
+      weight: "bold",
+      color: "#111111",
+      wrap: true,
+    },
+    {
+      type: "text",
+      text: description,
+      size: "xs",
+      color: "#666666",
+      margin: "xs",
+      wrap: true,
+    },
+  ];
+
+  if (example) {
+    contents.push({
+      type: "text",
+      text: `ตัวอย่าง: ${example}`,
+      size: "xs",
+      color: "#999999",
+      margin: "xs",
+      wrap: true,
+    });
+  }
+
+  return {
+    type: "box",
+    layout: "vertical",
+    margin: "md",
+    contents,
+  };
+}
+
+function createHelpBubble(title, subtitle, rows, footerButtons = []) {
+  return {
+    type: "bubble",
+    size: "mega",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: title,
+          weight: "bold",
+          size: "xl",
+          wrap: true,
+        },
+        {
+          type: "text",
+          text: subtitle,
+          size: "xs",
+          color: "#888888",
+          margin: "sm",
+          wrap: true,
+        },
+        createDivider(),
+        ...rows,
+      ],
+    },
+    footer:
+      footerButtons.length > 0
+        ? {
+            type: "box",
+            layout: "vertical",
+            spacing: "sm",
+            contents: footerButtons,
+          }
+        : undefined,
+  };
+}
+
+function getHelpFlex() {
+  return {
+    type: "carousel",
+    contents: [
+      createHelpBubble(
+        "ช่วยเหลือ 📌",
+        "คำสั่งพื้นฐานสำหรับบันทึกรายรับรายจ่าย",
+        [
+          createCommandHelpRow(
+            "กินข้าว 80",
+            "บันทึกรายจ่าย โดยระบบเดาหมวดให้อัตโนมัติ",
+            "กาแฟ 65"
+          ),
+          createCommandHelpRow(
+            "กาแฟ 65 เมื่อวาน",
+            "บันทึกรายการย้อนหลัง",
+            "ข้าว 120 เมื่อวาน"
+          ),
+          createCommandHelpRow(
+            "เงินสด กินข้าว 80",
+            "เลือกกระเป๋าที่ใช้จ่าย",
+            "ธนาคาร เงินเดือน 18000"
+          ),
+          createCommandHelpRow(
+            "YYYY-MM-DD",
+            "ระบุวันที่เองได้",
+            "กาแฟ 80 2026-05-15"
+          ),
+        ],
+        [
+          createPrimaryButton("สรุปวันนี้", "สรุปวันนี้"),
+          createSecondaryButton("รายการล่าสุด", "ล่าสุด"),
+        ]
+      ),
+
+      createHelpBubble(
+        "สรุปและประวัติ 📊",
+        "ดูภาพรวมรายวัน รายเดือน และรายการล่าสุด",
+        [
+          createCommandHelpRow(
+            "สรุปวันนี้",
+            "ดูรายรับ รายจ่าย และยอดสุทธิของวันนี้",
+            "สรุปวันนี้"
+          ),
+          createCommandHelpRow(
+            "สรุปเดือนนี้",
+            "ดูสรุปรายเดือน ค่าเฉลี่ยต่อวัน และหมวดที่ใช้เยอะสุด",
+            "สรุปเดือนนี้"
+          ),
+          createCommandHelpRow(
+            "ล่าสุด",
+            "ดูรายการล่าสุด 5 รายการ",
+            "ล่าสุด"
+          ),
+        ],
+        [
+          createPrimaryButton("ดูเดือนนี้", "สรุปเดือนนี้"),
+          createSecondaryButton("ดูวันนี้", "สรุปวันนี้"),
+        ]
+      ),
+
+      createHelpBubble(
+        "แก้ไขและลบรายการ 🧾",
+        "จัดการรายการที่บันทึกล่าสุด หรือเคลียร์ข้อมูลตามช่วงเวลา",
+        [
+          createCommandHelpRow(
+            "ลบล่าสุด",
+            "ลบรายการล่าสุด 1 รายการ",
+            "ลบล่าสุด"
+          ),
+          createCommandHelpRow(
+            "แก้ล่าสุด 120",
+            "แก้จำนวนเงินของรายการล่าสุด",
+            "แก้ล่าสุด 120"
+          ),
+          createCommandHelpRow(
+            "แก้หมวดล่าสุด อาหาร",
+            "เปลี่ยนหมวดของรายการล่าสุด",
+            "แก้หมวดล่าสุด อาหาร"
+          ),
+          createCommandHelpRow(
+            "แก้วันที่ล่าสุด เมื่อวาน",
+            "เปลี่ยนวันที่ของรายการล่าสุด",
+            "แก้วันที่ล่าสุด เมื่อวาน"
+          ),
+          createCommandHelpRow(
+            "แก้โน้ตล่าสุด ...",
+            "เปลี่ยนโน้ตของรายการล่าสุด",
+            "แก้โน้ตล่าสุด มื้อกลางวัน"
+          ),
+          createCommandHelpRow(
+            "แก้กระเป๋าล่าสุด ...",
+            "ย้ายรายการล่าสุดไปยังกระเป๋าอื่น",
+            "แก้กระเป๋าล่าสุด เงินสด"
+          ),
+          createCommandHelpRow(
+            "ลบข้อมูลวันนี้ / ลบข้อมูลเดือนนี้",
+            "ลบรายการตามช่วงเวลา",
+            "ลบข้อมูลวันนี้"
+          ),
+          createCommandHelpRow(
+            "ลบข้อมูลทั้งหมด",
+            "เริ่มขั้นตอนลบรายการทั้งหมด ต้องพิมพ์ยืนยันอีกครั้ง",
+            "ยืนยันลบข้อมูลทั้งหมด"
+          ),
+        ],
+        [
+          createPrimaryButton("ดูรายการล่าสุด", "ล่าสุด"),
+        ]
+      ),
+
+      createHelpBubble(
+        "กระเป๋าเงิน 👛",
+        "จัดการกระเป๋า เช่น เงินสด ธนาคาร E-Wallet หรือบัตรเครดิต",
+        [
+          createCommandHelpRow(
+            "กระเป๋า",
+            "ดูรายการกระเป๋าและยอดคงเหลือ",
+            "กระเป๋า"
+          ),
+          createCommandHelpRow(
+            "เพิ่มกระเป๋า",
+            "สร้างกระเป๋าใหม่ พร้อมยอดเริ่มต้น",
+            "เพิ่มกระเป๋า KBank 5000"
+          ),
+          createCommandHelpRow(
+            "ตั้งกระเป๋าหลัก",
+            "ตั้งกระเป๋าเริ่มต้นสำหรับรายการใหม่",
+            "ตั้งกระเป๋าหลัก เงินสด"
+          ),
+        ],
+        [
+          createPrimaryButton("ดูกระเป๋า", "กระเป๋า"),
+          createSecondaryButton("เพิ่มกระเป๋า", "เพิ่มกระเป๋า KBank 5000"),
+        ]
+      ),
+
+      createHelpBubble(
+        "งบประมาณ 💰",
+        "ตั้งงบรวมรายเดือน และงบแยกตามหมวด",
+        [
+          createCommandHelpRow(
+            "ตั้งงบเดือนนี้",
+            "ตั้งงบรวมของเดือนนี้",
+            "ตั้งงบเดือนนี้ 12000"
+          ),
+          createCommandHelpRow(
+            "งบวันนี้",
+            "ดูว่าวันนี้ควรใช้ได้ประมาณเท่าไหร่",
+            "งบวันนี้"
+          ),
+          createCommandHelpRow(
+            "ตั้งงบอาหาร",
+            "ตั้งงบรายหมวด",
+            "ตั้งงบอาหาร 5000"
+          ),
+          createCommandHelpRow(
+            "งบหมวด",
+            "ดูงบทุกหมวดในเดือนนี้",
+            "งบหมวด"
+          ),
+          createCommandHelpRow(
+            "งบ + ชื่อหมวด",
+            "ดูสถานะงบของหมวดนั้น",
+            "งบอาหาร"
+          ),
+        ],
+        [
+          createPrimaryButton("ดูงบวันนี้", "งบวันนี้"),
+          createSecondaryButton("ตั้งงบ", "ตั้งงบเดือนนี้ 12000"),
+        ]
+      ),
+
+      createHelpBubble(
+        "เป้าหมาย 🎯",
+        "ตั้งเป้าหมายการออม และอัปเดตยอดออม",
+        [
+          createCommandHelpRow(
+            "ตั้งเป้า",
+            "สร้างเป้าหมายใหม่",
+            "ตั้งเป้า iPhone 45000"
+          ),
+          createCommandHelpRow(
+            "ออม",
+            "เพิ่มเงินออมเข้าเป้าหมาย",
+            "ออม iPhone 1000"
+          ),
+          createCommandHelpRow(
+            "เป้าหมาย",
+            "ดูเป้าหมายที่ยัง active อยู่",
+            "เป้าหมาย"
+          ),
+        ],
+        [
+          createPrimaryButton("ดูเป้าหมาย", "เป้าหมาย"),
+          createSecondaryButton("ตั้งเป้าใหม่", "ตั้งเป้า iPhone 45000"),
+        ]
+      ),
+    ],
   };
 }
 
@@ -772,6 +1102,86 @@ async function deleteLatestTransaction(userId) {
   );
 }
 
+async function deleteTransactionsByScope(userId, scope) {
+  let query = supabase.from("transactions").select("*").eq("user_id", userId);
+
+  let scopeLabel = "";
+  let startDate = null;
+  let endDate = null;
+
+  if (scope === "today") {
+    const today = getTodayBangkokDate();
+    scopeLabel = "วันนี้";
+    query = query.eq("transaction_date", today);
+  } else if (scope === "month") {
+    const today = getTodayBangkokDate();
+    const [year, month] = today.split("-");
+
+    startDate = `${year}-${month}-01`;
+    endDate = today;
+    scopeLabel = "เดือนนี้";
+
+    query = query
+      .gte("transaction_date", startDate)
+      .lte("transaction_date", endDate);
+  } else if (scope === "all") {
+    scopeLabel = "ทั้งหมด";
+  } else {
+    return "ไม่รู้จักช่วงข้อมูลที่ต้องการลบครับ";
+  }
+
+  const { data: transactions, error: findError } = await query;
+
+  if (findError) {
+    throw findError;
+  }
+
+  if (!transactions || transactions.length === 0) {
+    return `ไม่มีข้อมูล${scopeLabel}ให้ลบครับ`;
+  }
+
+  const summary = calculateSummary(transactions);
+  const ids = transactions.map((item) => item.id);
+
+  const { error: deleteError } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("user_id", userId)
+    .in("id", ids);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  await reverseWalletImpactForTransactions(transactions);
+
+  return (
+    `ลบข้อมูล${scopeLabel}แล้ว ✅\n\n` +
+    `จำนวนรายการที่ลบ: ${transactions.length} รายการ\n` +
+    `รายรับที่ลบ: ${formatMoney(summary.totalIncome)} บาท\n` +
+    `รายจ่ายที่ลบ: ${formatMoney(summary.totalExpense)} บาท\n\n` +
+    `ยอดกระเป๋าถูกปรับกลับแล้ว`
+  );
+}
+
+async function reverseWalletImpactForTransactions(transactions) {
+  const walletDeltas = {};
+
+  for (const item of transactions) {
+    if (!item.wallet_id) continue;
+
+    const reverseImpact =
+      item.type === "income" ? -Number(item.amount) : Number(item.amount);
+
+    walletDeltas[item.wallet_id] =
+      (walletDeltas[item.wallet_id] || 0) + reverseImpact;
+  }
+
+  for (const [walletId, delta] of Object.entries(walletDeltas)) {
+    await updateWalletBalance(walletId, delta);
+  }
+}
+
 async function editLatestTransaction(userId, edit) {
   const { data: latest, error: findError } = await supabase
     .from("transactions")
@@ -900,6 +1310,10 @@ async function getLatestTransactions(userId) {
     `รายการล่าสุด 🧾\n\n${listText}\n\n` +
     `คำสั่งที่ใช้ได้:\n` +
     `ลบล่าสุด\n` +
+    `ลบข้อมูลวันนี้\n` +
+    `ลบข้อมูลเดือนนี้\n` +
+    `ลบข้อมูลทั้งหมด\n` +
+    `ยืนยันลบข้อมูลทั้งหมด\n` +
     `แก้ล่าสุด 120\n` +
     `แก้หมวดล่าสุด อาหาร\n` +
     `แก้วันที่ล่าสุด เมื่อวาน`

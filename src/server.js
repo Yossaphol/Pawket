@@ -6,7 +6,12 @@ const supabase = require("./supabase");
 
 const app = express();
 
-const requiredEnv = ["LINE_CHANNEL_SECRET", "LINE_CHANNEL_ACCESS_TOKEN"];
+const requiredEnv = [
+  "LINE_CHANNEL_SECRET",
+  "LINE_CHANNEL_ACCESS_TOKEN",
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+];
 
 for (const key of requiredEnv) {
   if (!process.env[key]) {

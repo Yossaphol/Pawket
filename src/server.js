@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const line = require("@line/bot-sdk");
+const supabase = require("./supabase");
 
 const app = express();
 
@@ -60,6 +61,9 @@ async function handleEvent(event) {
     });
   }
 
+  const user = await getOrCreateUser(event.source.userId);
+  await saveTransaction(user.id, transaction);
+
   return client.replyMessage({
     replyToken: event.replyToken,
     messages: [
@@ -112,6 +116,58 @@ function parseTransaction(text) {
     rawText: text,
   };
 }
+
+async function getOrCreateUser(lineUserId) {
+  const { data: existingUser, error: findError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("line_user_id", lineUserId)
+    .maybeSingle();
+
+  if (findError) {
+    throw findError;
+  }
+
+  if (existingUser) {
+    return existingUser;
+  }
+
+  const { data: newUser, error: insertError } = await supabase
+    .from("users")
+    .insert({
+      line_user_id: lineUserId,
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return newUser;
+}
+
+async function saveTransaction(userId, transaction) {
+  const { data, error } = await supabase
+    .from("transactions")
+    .insert({
+      user_id: userId,
+      type: transaction.type,
+      amount: transaction.amount,
+      category: transaction.category,
+      note: transaction.note,
+      raw_text: transaction.rawText,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
 
 const port = process.env.PORT || 3000;
 

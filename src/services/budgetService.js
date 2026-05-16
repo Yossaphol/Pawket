@@ -41,6 +41,34 @@ async function setMonthlyBudget(userId, amount) {
   );
 }
 
+async function deleteMonthlyBudget(userId) {
+  const { year, month } = getCurrentBangkokYearMonth();
+
+  const { data, error } = await supabase
+    .from("monthly_budgets")
+    .delete()
+    .eq("user_id", userId)
+    .eq("year", year)
+    .eq("month", month)
+    .select();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    return "ยังไม่มีงบรวมเดือนนี้ให้ลบครับ\n\nลองพิมพ์: ตั้งงบเดือนนี้ 12000";
+  }
+
+  const deletedBudget = data[0];
+
+  return (
+    `ลบงบรวมเดือนนี้แล้ว ✅\n\n` +
+    `งบที่ลบ: ${formatMoney(deletedBudget.total_budget)} บาท\n` +
+    `เดือน: ${String(month).padStart(2, "0")}/${year}`
+  );
+}
+
 async function getDailyBudget(userId) {
   const today = getTodayBangkokDate();
   const [yearText, monthText, dayText] = today.split("-");
@@ -236,6 +264,35 @@ async function setCategoryBudget(userId, categoryBudget) {
   );
 }
 
+async function deleteCategoryBudget(userId, category) {
+  const { year, month } = getCurrentBangkokYearMonth();
+
+  const { data, error } = await supabase
+    .from("category_budgets")
+    .delete()
+    .eq("user_id", userId)
+    .eq("year", year)
+    .eq("month", month)
+    .eq("category", category)
+    .select();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    return `ยังไม่มีงบ${getCategoryLabel(category)}ของเดือนนี้ให้ลบครับ\n\nลองพิมพ์: ตั้งงบ${getCategoryLabel(category)} 5000`;
+  }
+
+  const deletedBudget = data[0];
+
+  return (
+    `ลบงบ${getCategoryLabel(category)}แล้ว ✅\n\n` +
+    `งบที่ลบ: ${formatMoney(deletedBudget.budget_amount)} บาท\n` +
+    `เดือน: ${String(month).padStart(2, "0")}/${year}`
+  );
+}
+
 async function getCategoryBudgetsText(userId) {
   const today = getTodayBangkokDate();
   const [yearText, monthText] = today.split("-");
@@ -403,9 +460,11 @@ function getSpentByCategory(transactions) {
 
 module.exports = {
   setMonthlyBudget,
+  deleteMonthlyBudget,
   getDailyBudget,
   getDailyBudgetFlex,
   setCategoryBudget,
+  deleteCategoryBudget,
   getCategoryBudgetsText,
   getCategoryBudgetText,
   getCategoryBudgetWarnings,

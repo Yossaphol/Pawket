@@ -19,14 +19,17 @@ const {
 } = require("../services/walletService");
 const {
   setMonthlyBudget,
+  deleteMonthlyBudget,
   getDailyBudgetFlex,
   setCategoryBudget,
+  deleteCategoryBudget,
   getCategoryBudgetsText,
   getCategoryBudgetText,
 } = require("../services/budgetService");
 const {
   createGoal,
   addGoalSaving,
+  deleteGoal,
   getGoalsFlex,
 } = require("../services/goalService");
 const { parseTransaction } = require("../parsers/transactionParser");
@@ -39,6 +42,9 @@ const {
   parseCategoryBudgetViewCommand,
   parseGoalCreationCommand,
   parseGoalSavingCommand,
+  parseGoalDeleteCommand,
+  parseMonthlyBudgetDeleteCommand,
+  parseCategoryBudgetDeleteCommand,
 } = require("../parsers/commandParsers");
 const { getCategoryLabel } = require("../utils/category");
 const { formatMoney } = require("../utils/format");
@@ -174,6 +180,11 @@ async function handleEvent(event) {
     return replyText(event.replyToken, budgetText);
   }
 
+  if (parseMonthlyBudgetDeleteCommand(userText)) {
+    const deletedText = await deleteMonthlyBudget(user.id);
+    return replyText(event.replyToken, deletedText);
+  }
+
   if (
     userText === "งบวันนี้" ||
     userText === "ใช้ได้วันนี้" ||
@@ -187,6 +198,12 @@ async function handleEvent(event) {
   if (categoryBudget) {
     const categoryBudgetText = await setCategoryBudget(user.id, categoryBudget);
     return replyText(event.replyToken, categoryBudgetText);
+  }
+
+  const categoryBudgetDelete = parseCategoryBudgetDeleteCommand(userText);
+  if (categoryBudgetDelete) {
+    const deletedText = await deleteCategoryBudget(user.id, categoryBudgetDelete.category);
+    return replyText(event.replyToken, deletedText);
   }
 
   if (
@@ -217,6 +234,12 @@ async function handleEvent(event) {
   if (goalSaving) {
     const savingText = await addGoalSaving(user.id, goalSaving);
     return replyText(event.replyToken, savingText);
+  }
+
+  const goalDelete = parseGoalDeleteCommand(userText);
+  if (goalDelete) {
+    const deletedText = await deleteGoal(user.id, goalDelete.name);
+    return replyText(event.replyToken, deletedText);
   }
 
   if (

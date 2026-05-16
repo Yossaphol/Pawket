@@ -91,6 +91,45 @@ async function addGoalSaving(userId, saving) {
   );
 }
 
+async function deleteGoal(userId, goalName) {
+  const { data: goal, error: findError } = await supabase
+    .from("goals")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .ilike("name", `%${goalName}%`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (findError) {
+    throw findError;
+  }
+
+  if (!goal) {
+    return `ไม่เจอเป้าหมายชื่อ “${goalName}” ครับ\n\nพิมพ์ “เป้าหมาย” เพื่อดูรายการเป้าหมาย`;
+  }
+
+  const { error: updateError } = await supabase
+    .from("goals")
+    .update({
+      status: "deleted",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", goal.id);
+
+  if (updateError) {
+    throw updateError;
+  }
+
+  return (
+    `ลบเป้าหมายแล้ว ✅\n\n` +
+    `${goal.name}\n` +
+    `เป้าหมาย: ${formatMoney(goal.target_amount)} บาท\n` +
+    `ออมแล้ว: ${formatMoney(goal.current_amount)} บาท`
+  );
+}
+
 async function getGoals(userId) {
   const { data, error } = await supabase
     .from("goals")
@@ -218,6 +257,7 @@ async function getGoalsFlex(userId) {
 module.exports = {
   createGoal,
   addGoalSaving,
+  deleteGoal,
   getGoals,
   getGoalsFlex,
 };

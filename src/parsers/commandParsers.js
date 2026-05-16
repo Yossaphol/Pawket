@@ -69,6 +69,44 @@ function parseGoalSavingCommand(text) {
   };
 }
 
+function parseGoalDeleteCommand(text) {
+  const match = text.match(/^(?:ลบเป้า|ลบเป้าหมาย|delete goal)\s+(.+)$/i);
+  if (!match) return null;
+
+  return {
+    name: match[1].trim(),
+  };
+}
+
+function parseMonthlyBudgetDeleteCommand(text) {
+  const match = text.match(
+    /^(?:ลบงบเดือนนี้|ล้างงบเดือนนี้|ลบงบรวมเดือนนี้|delete monthly budget|clear monthly budget)$/i
+  );
+
+  return Boolean(match);
+}
+
+function parseCategoryBudgetDeleteCommand(text) {
+  let match = text.match(/^(?:ลบงบหมวด|ล้างงบหมวด)\s+(.+)$/i);
+
+  if (!match) {
+    match = text.match(/^(?:ลบงบ|ล้างงบ)(.+)$/i);
+  }
+
+  if (!match) return null;
+
+  const rawCategory = match[1].trim();
+
+  if (rawCategory === "วันนี้" || rawCategory === "เดือนนี้" || rawCategory === "รวมเดือนนี้") {
+    return null;
+  }
+
+  const category = normalizeCategoryName(rawCategory);
+  if (!category || category === "income") return null;
+
+  return { category };
+}
+
 function parseEditLatestCommand(text) {
   let match = text.match(
     /^(?:แก้ล่าสุด|แก้จำนวนล่าสุด|edit latest)\s+(\d+(?:\.\d+)?)$/i
@@ -165,6 +203,9 @@ module.exports = {
   parseCategoryBudgetViewCommand,
   parseGoalCreationCommand,
   parseGoalSavingCommand,
+  parseGoalDeleteCommand,
+  parseMonthlyBudgetDeleteCommand,
+  parseCategoryBudgetDeleteCommand,
   parseEditLatestCommand,
   parseWalletCreationCommand,
   parseDefaultWalletCommand,
